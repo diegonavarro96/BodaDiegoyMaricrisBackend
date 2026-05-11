@@ -1,0 +1,11 @@
+# Built binary
+wedding-rsvp
+wedding-rsvp.exe
+
+# Real RSVP data (never commit guest info)
+data/rsvps.json
+data/*.tmp
+
+# Local env files
+.env
+.env.local
