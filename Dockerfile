@@ -14,15 +14,16 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 
 # --- runtime stage ---------------------------------------------------------
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates tzdata \
- && adduser -D -u 10001 app
+RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 COPY --from=build /out/wedding-rsvp /app/wedding-rsvp
 
-# Railway mounts the persistent volume at /data. Pre-create it so the
-# image is also runnable standalone, and so the app user owns it.
-RUN mkdir -p /data && chown -R app:app /data /app
-USER app
+# Run as root inside the container. Reason: Railway mounts the persistent
+# volume at /data at runtime and the mount replaces in-image ownership, so
+# a non-root user can't write to /data without an entrypoint that chowns
+# at boot. Container isolation provides the security boundary here, not
+# in-container UID separation.
+RUN mkdir -p /data
 
 EXPOSE 8080
 CMD ["/app/wedding-rsvp"]
