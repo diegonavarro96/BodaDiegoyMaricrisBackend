@@ -62,23 +62,17 @@ Cross-compile for Linux from Windows:
 GOOS=linux GOARCH=amd64 go build -o wedding-rsvp .
 ```
 
-## Deploy notes (AWS)
+## Deploy
 
-1. `scp` the binary and create `/var/www/wedding-rsvp/`.
-2. Put `data/` next to the binary; the directory must be writable by the service user.
-3. Run under systemd. Example unit:
+For Railway, see the Railway-specific guide added alongside this repo
+(`RAILWAY.md`, pending).
 
-   ```ini
-   [Service]
-   Environment=ADMIN_TOKEN=<long-random-string>
-   Environment=ALLOWED_ORIGIN=https://your-wedding-domain
-   WorkingDirectory=/var/www/wedding-rsvp
-   ExecStart=/var/www/wedding-rsvp/wedding-rsvp
-   Restart=always
-   ```
+For a self-hosted AWS/VPS deploy, the [`deploy/`](deploy/) folder has:
 
-4. Reverse-proxy `/api/` to `127.0.0.1:8080` from nginx so the API and
-   static site share the same origin and HTTPS cert.
+- `wedding-rsvp.service` — hardened systemd unit
+- `wedding-rsvp.env.example` — env file template (PORT, DATA_PATH, ADMIN_TOKEN, ALLOWED_ORIGIN)
+- `nginx.conf` — nginx site that serves the React build and proxies `/api/`
+- `build-linux.ps1` — cross-compile a Linux/amd64 binary from Windows
 
 ## Data safety
 
