@@ -18,13 +18,15 @@ import (
 )
 
 type RSVP struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	Email      string    `json:"email"`
-	Attending  string    `json:"attending"`
-	Vegetarian bool      `json:"vegetarian"`
-	Message    string    `json:"message"`
-	CreatedAt  time.Time `json:"createdAt"`
+	ID                string    `json:"id"`
+	Name              string    `json:"name"`
+	Email             string    `json:"email"`
+	Attending         string    `json:"attending"`
+	Vegetarian        bool      `json:"vegetarian"`
+	PlusOneName       string    `json:"plusOneName,omitempty"`
+	PlusOneVegetarian bool      `json:"plusOneVegetarian,omitempty"`
+	Message           string    `json:"message"`
+	CreatedAt         time.Time `json:"createdAt"`
 }
 
 type Store struct {
@@ -209,11 +211,13 @@ func (s *Server) handleRSVP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) createRSVP(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Name       string `json:"name"`
-		Email      string `json:"email"`
-		Attending  string `json:"attending"`
-		Vegetarian bool   `json:"vegetarian"`
-		Message    string `json:"message"`
+		Name              string `json:"name"`
+		Email             string `json:"email"`
+		Attending         string `json:"attending"`
+		Vegetarian        bool   `json:"vegetarian"`
+		PlusOneName       string `json:"plusOneName"`
+		PlusOneVegetarian bool   `json:"plusOneVegetarian"`
+		Message           string `json:"message"`
 	}
 	dec := json.NewDecoder(io.LimitReader(r.Body, 64*1024))
 	dec.DisallowUnknownFields()
@@ -224,6 +228,7 @@ func (s *Server) createRSVP(w http.ResponseWriter, r *http.Request) {
 
 	in.Name = strings.TrimSpace(in.Name)
 	in.Email = strings.TrimSpace(in.Email)
+	in.PlusOneName = strings.TrimSpace(in.PlusOneName)
 	in.Message = strings.TrimSpace(in.Message)
 
 	if in.Name == "" || len(in.Name) > 200 {
@@ -238,19 +243,43 @@ func (s *Server) createRSVP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "attending must be 'yes' or 'no'")
 		return
 	}
+	if len(in.PlusOneName) > 200 {
+		writeError(w, http.StatusBadRequest, "plus-one name too long (max 200 chars)")
+		return
+	}
 	if len(in.Message) > 2000 {
 		writeError(w, http.StatusBadRequest, "message too long")
 		return
 	}
 
+	// Plus-one only makes sense when the primary is attending. Drop the
+	// plus-one fields if they marked "no" so we don't store inconsistent data.
+	plusOneName := in.PlusOneName
+	plusOneVeg := in.PlusOneVegetarian
+	if in.Attending != "yes" {
+		plusOneName = ""
+		plusOneVeg = false
+	}
+	// Vegetarian for an absent guest is also nonsense — zero it out.
+	vegetarian := in.Vegetarian
+	if in.Attending != "yes" {
+		vegetarian = false
+	}
+	// A plus-one veg flag with no plus-one name is also nonsense.
+	if plusOneName == "" {
+		plusOneVeg = false
+	}
+
 	rsvp := RSVP{
-		ID:         newID(),
-		Name:       in.Name,
-		Email:      in.Email,
-		Attending:  in.Attending,
-		Vegetarian: in.Vegetarian,
-		Message:    in.Message,
-		CreatedAt:  time.Now().UTC(),
+		ID:                newID(),
+		Name:              in.Name,
+		Email:             in.Email,
+		Attending:         in.Attending,
+		Vegetarian:        vegetarian,
+		PlusOneName:       plusOneName,
+		PlusOneVegetarian: plusOneVeg,
+		Message:           in.Message,
+		CreatedAt:         time.Now().UTC(),
 	}
 	saved, updated, err := s.store.UpsertByEmail(rsvp)
 	if err != nil {
