@@ -334,7 +334,10 @@ func main() {
 	port := envOr("PORT", "8080")
 	dataPath := envOr("DATA_PATH", "data/rsvps.json")
 	adminToken := os.Getenv("ADMIN_TOKEN")
-	allowedOrigin := envOr("ALLOWED_ORIGIN", "http://localhost:5173")
+	// Browsers send Origin with no path and no trailing slash. Trim whitespace
+	// and trailing slashes so a misconfigured env var (e.g. "https://site.com/")
+	// still matches the browser's "https://site.com" and CORS doesn't break.
+	allowedOrigin := strings.TrimRight(strings.TrimSpace(envOr("ALLOWED_ORIGIN", "http://localhost:5173")), "/")
 
 	if adminToken == "" {
 		log.Println("WARNING: ADMIN_TOKEN is not set — admin endpoints will reject all requests")
