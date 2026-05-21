@@ -77,15 +77,28 @@ func (s *Store) List() ([]RSVP, error) {
 	return s.load()
 }
 
-func (s *Store) Append(r RSVP) error {
+// UpsertByEmail inserts r, or if a record with the same email (case-
+// insensitive) already exists, replaces it in place — keeping the original
+// ID and CreatedAt so admin views stay stable. Returns the persisted record
+// and whether it was an update of an existing row.
+func (s *Store) UpsertByEmail(r RSVP) (RSVP, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	rsvps, err := s.load()
 	if err != nil {
-		return err
+		return RSVP{}, false, err
+	}
+	needle := strings.ToLower(r.Email)
+	for i, existing := range rsvps {
+		if strings.ToLower(existing.Email) == needle {
+			r.ID = existing.ID
+			r.CreatedAt = existing.CreatedAt
+			rsvps[i] = r
+			return r, true, s.save(rsvps)
+		}
 	}
 	rsvps = append(rsvps, r)
-	return s.save(rsvps)
+	return r, false, s.save(rsvps)
 }
 
 func (s *Store) Delete(id string) (bool, error) {
@@ -239,12 +252,17 @@ func (s *Server) createRSVP(w http.ResponseWriter, r *http.Request) {
 		Message:    in.Message,
 		CreatedAt:  time.Now().UTC(),
 	}
-	if err := s.store.Append(rsvp); err != nil {
+	saved, updated, err := s.store.UpsertByEmail(rsvp)
+	if err != nil {
 		log.Printf("save rsvp: %v", err)
 		writeError(w, http.StatusInternalServerError, "could not save rsvp")
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]string{"id": rsvp.ID})
+	status := http.StatusCreated
+	if updated {
+		status = http.StatusOK
+	}
+	writeJSON(w, status, map[string]any{"id": saved.ID, "updated": updated})
 }
 
 func (s *Server) handleRSVPByID(w http.ResponseWriter, r *http.Request) {
